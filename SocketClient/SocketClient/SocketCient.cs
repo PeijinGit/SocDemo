@@ -17,10 +17,10 @@ namespace SocketClient
         private byte[] buffer = new byte[1024 * 1024 * 2];
 
         /// <summary>
-        /// 构造函数
+        /// Constructor
         /// </summary>
-        /// <param name="ip">连接服务器的IP</param>
-        /// <param name="port">连接服务器的端口</param>
+        /// <param name="ip">Server IP</param>
+        /// <param name="port">Server Port</param>
         public SocketClient(string ip, int port)
         {
             this._ip = ip;
@@ -33,39 +33,43 @@ namespace SocketClient
         }
 
         /// <summary>
-        /// 开启服务,连接服务端
+        /// Strat connection
         /// </summary>
         public void StartClient()
         {
             try
             {
-                //1.0 实例化套接字(IP4寻址地址,流式传输,TCP协议)
+                //1.0 Instance Socket(IP4,Sream,TCP)
                 _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                //2.0 创建IP对象
+                //2.0 Create IP obj
                 IPAddress address = IPAddress.Parse(_ip);
-                //3.0 创建网络端口包括ip和端口
+                //3.0 Build IP + PORT
                 IPEndPoint endPoint = new IPEndPoint(address, _port);
-                //4.0 建立连接
+                //4.0 Build Connection
                 _socket.Connect(endPoint);
-                Console.WriteLine("连接服务器成功");
-                //5.0 接收数据
+                Console.WriteLine("Connection From Server");
+                //5.0 Receive Data
                 int length = _socket.Receive(buffer);
-                Console.WriteLine("接收服务器{0},消息:{1}", _socket.RemoteEndPoint.ToString(), Encoding.UTF8.GetString(buffer, 0, length));
+                Console.WriteLine("Receive From Server{0},Message:{1}", _socket.RemoteEndPoint.ToString(), Encoding.UTF8.GetString(buffer, 0, length));
                 Thread thread = new Thread(() => {
                     while (true) 
                     {
                         int length = _socket.Receive(buffer);
-                        Console.WriteLine("分支线程接收服务器{0},消息:{1}", _socket.RemoteEndPoint.ToString(), Encoding.UTF8.GetString(buffer, 0, length));
+                        Console.WriteLine("New Thread Receive Server{0},Message:{1}", _socket.RemoteEndPoint.ToString(), Encoding.UTF8.GetString(buffer, 0, length));
                     }
                 });
-                thread.Start();
-                //6.0 向服务器发送消息
+                //thread.Start();
+                
+                TestReceiveAsync();
+                //6.0 Send To Server
                 for (int i = 0; i < 10; i++)
                 {
                     Thread.Sleep(2000);
-                    string sendMessage = string.Format("客户端发送的消息,当前时间{0}", DateTime.Now.ToString());
-                    _socket.Send(Encoding.UTF8.GetBytes(sendMessage));
-                    Console.WriteLine("向服务发送的消息:{0}", sendMessage);
+                    string sendMessage = string.Format("From Client,Current Time{0}", DateTime.Now.ToString());
+                    //_socket.Send(Encoding.UTF8.GetBytes(sendMessage));
+
+                    TestSendAsync(sendMessage);
+                    Console.WriteLine("SendtoServer:{0}", sendMessage);
                 }
             }
             catch (Exception ex)
@@ -74,8 +78,50 @@ namespace SocketClient
                 _socket.Close();
                 Console.WriteLine(ex.Message);
             }
-            Console.WriteLine("发送消息结束");
+            Console.WriteLine("Finish Sending");
             Console.ReadKey();
+        }
+
+        public void TestSendAsync(string sendMsg)
+        {
+            sendMsg = "ASYNC!!";
+            var socketEventArgs = new SocketAsyncEventArgs();
+            socketEventArgs.RemoteEndPoint = _socket.RemoteEndPoint;
+            socketEventArgs.UserToken = null;
+            socketEventArgs.Completed += OnSendCompleted;
+            byte[] byteMessage = Encoding.UTF8.GetBytes(sendMsg);
+            socketEventArgs.SetBuffer(byteMessage, 0, byteMessage.Length);
+            _socket.SendAsync(socketEventArgs);
+        }
+
+        public void TestReceiveAsync()
+        {
+            var socketEventArgs = new SocketAsyncEventArgs();
+            socketEventArgs.RemoteEndPoint = _socket.RemoteEndPoint;
+            socketEventArgs.UserToken = null;
+            socketEventArgs.Completed += OnReceiveCompleted;
+            socketEventArgs.SetBuffer(buffer, 0, buffer.Length);
+            _socket.ReceiveAsync(socketEventArgs);
+        }
+        public void OnSendCompleted(object sender, SocketAsyncEventArgs e)
+        {
+            if (e.SocketError != SocketError.Success) return;
+            var socket = sender as Socket;
+            byte[] sendBuffer = e.Buffer;
+            
+            //int bytesRec = socket.Receive(sendBuffer);
+            //var  response = Encoding.ASCII.GetString(sendBuffer, 0, bytesRec);
+            //Console.WriteLine("Response: " + response);
+        }
+        public void OnReceiveCompleted(object sender, SocketAsyncEventArgs e)
+        {
+            if (e.SocketError != SocketError.Success) return;
+            var socket = sender as Socket;
+            byte[] recBuffer = e.Buffer;
+            var res = Encoding.UTF8.GetString(buffer, 0, recBuffer[0]);
+            //int bytesRec = socket.Receive(sendBuffer);
+            //var  response = Encoding.ASCII.GetString(sendBuffer, 0, bytesRec);
+            //Console.WriteLine("Response: " + response);
         }
     }
 }
